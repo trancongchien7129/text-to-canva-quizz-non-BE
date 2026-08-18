@@ -9,8 +9,8 @@ C.
 D.
 
 Câu xx.
-A.       B.
-C.       D.
+A.        B.
+C.        D.
 
 **chưa hỗ trợ đúng sai trả lời ngắn (update soon)**
 
