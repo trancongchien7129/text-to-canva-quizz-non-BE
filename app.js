@@ -172,95 +172,77 @@ async function readImageFileWithOCR(file) {
 function parseQuestions(rawText) {
   const text = rawText
     .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
     .replace(/\u00a0/g, ' ')
+    .replace(/\*\*([A-D])\*\*/g, '$1.')
     .trim();
 
   if (!text) return [];
 
-  const blocks = [];
-  const blockRe = /(?:^|\n)\s*(?:Câu|Cau|Question)\s*(\d+)\s*[.:]?\s*([\s\S]*?)(?=\n\s*(?:Câu|Cau|Question)\s*\d+\s*[.:]?|$)/gi;
+  const blocks = text.split(/(?=\s*(?:Câu|Cau|Question)\s*\d+\s*(?:[.:]|$))/i)
+    .map(s => s.trim())
+    .filter(Boolean);
 
-  let blockMatch;
-  while ((blockMatch = blockRe.exec(text)) !== null) {
-    const id = Number(blockMatch[1]);
-    const content = (blockMatch[2] || '').trim();
-    if (content) blocks.push({ id, content });
-  }
-
-  if (blocks.length === 0) {
-    const fallbackBlocks = text
-      .split(/(?=\n?\s*\d+\s*[.)]\s+)/)
-      .map(s => s.trim())
-      .filter(Boolean);
-
-    for (let i = 0; i < fallbackBlocks.length; i++) {
-      const m = fallbackBlocks[i].match(/^\d+\s*[.)]\s*([\s\S]*)$/);
-      if (m) blocks.push({ id: i + 1, content: m[1].trim() });
-    }
-  }
-
+  const questionBlocks = blocks.length ? blocks : [text];
   const parsed = [];
 
-  for (const block of blocks) {
-    const content = block.content.replace(/\n+/g, '\n').trim();
-    const optionStarts = [];
+  function findAnswerMarker(body, letter, fromIndex = 0) {
+    const regex = new RegExp(`(?<![A-Za-z])${letter}(?:\\*\\*)?\\s*(?:[.:)]|(?=\\s*(?:\\n|$)))`, 'gi');
+    regex.lastIndex = fromIndex;
 
-    for (let i = 0; i < content.length; i++) {
-      const ch = content[i];
-      if (!/[A-D]/i.test(ch)) continue;
-
-      const prev = content[i - 1] || ' ';
-      if (/[A-Za-z]/.test(prev)) continue;
-
-      let j = i + 1;
-      let consumedWhitespace = false;
-      while (j < content.length && /\s/.test(content[j])) {
-        consumedWhitespace = true;
-        j++;
-      }
-
-      const next = content[j] || '';
-      const validMarker =
-        j >= content.length ||
-        /[.:)]/.test(next) ||
-        (consumedWhitespace && /[A-Za-z]/.test(next));
-
-      if (validMarker) {
-        optionStarts.push({ letter: ch.toUpperCase(), start: i, end: j });
+    let match = null;
+    while ((match = regex.exec(body)) !== null) {
+      const actualIndex = match.index + match[0].indexOf(letter);
+      if (actualIndex >= fromIndex) {
+        return {
+          letter,
+          start: actualIndex,
+          end: match.index + match[0].length
+        };
       }
     }
 
-    if (optionStarts.length < 2) continue;
+    return null;
+  }
+
+  for (const block of questionBlocks) {
+    const blockText = block.replace(/\s+/g, ' ').trim();
+    if (!blockText) continue;
+
+    const qMatch = blockText.match(/^(?:Câu|Cau|Question)\s*(\d+)\s*[.:]?\s*([\s\S]*)$/i);
+    const body = qMatch ? qMatch[2].trim() : blockText;
+    if (!body) continue;
+
+    const markers = [];
+    let cursor = 0;
+
+    for (const letter of ['A', 'B', 'C', 'D']) {
+      const marker = findAnswerMarker(body, letter, cursor);
+      if (!marker) break;
+      markers.push(marker);
+      cursor = marker.end;
+    }
+
+    if (markers.length < 4) continue;
 
     const options = {};
-    for (let i = 0; i < optionStarts.length; i++) {
-      const current = optionStarts[i];
-      const next = optionStarts[i + 1] || { start: content.length, end: content.length };
-      let value = content.slice(current.end, next.start).replace(/\s+/g, ' ').trim();
-      value = value.replace(new RegExp(`^${current.letter}\\s*(?:[.:)]\\s*)?`, 'i'), '').trim();
+    for (let i = 0; i < markers.length; i++) {
+      const current = markers[i];
+      const next = markers[i + 1] || { start: body.length };
+      const value = body.slice(current.end, next.start)
+        .replace(/^[\s:.)]+|[\s:.)]+$/g, '')
+        .trim();
+
       if (value) options[current.letter] = value;
     }
 
-    const questionStart = optionStarts[0].start;
-    const question = content.slice(0, questionStart).replace(/\s+/g, ' ').trim();
+    const question = body.slice(0, markers[0].start).replace(/\s+/g, ' ').trim();
 
-    if (question && Object.keys(options).length >= 2) {
+    if (question && Object.keys(options).length >= 4) {
       parsed.push({
-        id: parsed.length + 1,
+        id: qMatch ? Number(qMatch[1]) : parsed.length + 1,
         question,
         options
-      });
-    }
-  }
-
-  if (parsed.length > 0) {
-    const explicitIds = blocks
-      .map(b => Number(b.id))
-      .filter(n => Number.isFinite(n));
-
-    if (explicitIds.length === parsed.length) {
-      parsed.forEach((q, idx) => {
-        q.id = explicitIds[idx];
       });
     }
   }
@@ -306,9 +288,10 @@ function selectAnswer(questionId, letter) {
 
 function updateProgress() {
   const total = questions.length;
-  const current = currentIndex + 1;
+  const currentQuestion = questions[currentIndex];
+  const current = currentQuestion ? currentQuestion.id : 0;
   progressText.textContent = `Câu ${current} / ${total}`;
-  progressBarFill.style.width = `${(current / total) * 100}%`;
+  progressBarFill.style.width = `${(currentIndex / Math.max(total - 1, 1)) * 100}%`;
 }
 
 function renderJumpDots() {
@@ -426,6 +409,9 @@ async function handleFile(file) {
     }
 
     const parsed = parseQuestions(text);
+
+    console.log('Số câu:', parsed.length);
+    console.log('Các câu đã nhận:', parsed.map(q => q.id));
 
     if (parsed.length === 0) {
       throw new Error(
