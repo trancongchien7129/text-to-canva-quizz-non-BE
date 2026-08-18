@@ -169,59 +169,79 @@ async function readImageFileWithOCR(file) {
    ========================================================== */
 
 function parseQuestions(rawText) {
-  // Normalize line breaks and strip weird whitespace
-  const text = rawText.replace(/\r\n/g, '\n').trim();
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const text = rawText
+    .replace(/\r\n/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .trim();
 
-  // Regex to detect a new question line:
-  // "Question 1:", "Question 1.", "Câu 1:", "Câu 1.", "1)", "1."
-  const questionStartRe = /^(?:question|câu|cau)\s*(\d+)\s*[:.\)]?\s*(.*)$/i;
-  const looseNumberRe = /^(\d+)\s*[.\)]\s*(.*)$/;
+  if (!text) return [];
 
-  // Regex to detect an option line: "A. text", "A) text", "A: text"
-  const optionRe = /^([A-Da-d])\s*[.:\)]\s*(.+)$/;
+  const blocks = [];
+  const blockRe = /(?:^|\n)\s*(?:Câu|Cau|Question)\s*(\d+)\s*[.:]?\s*([\s\S]*?)(?=\n\s*(?:Câu|Cau|Question)\s*\d+\s*[.:]?|$)/gi;
 
-  const parsed = [];
-  let current = null;
-
-  for (const line of lines) {
-    const qMatch = line.match(questionStartRe) || line.match(looseNumberRe);
-    const optMatch = line.match(optionRe);
-
-    if (qMatch && !optMatch) {
-      // Push previous question if valid
-      if (current) parsed.push(current);
-      current = {
-        id: parsed.length + 1,
-        question: qMatch[2] ? qMatch[2].trim() : '',
-        options: {}
-      };
-      continue;
-    }
-
-    if (optMatch && current) {
-      const letter = optMatch[1].toUpperCase();
-      const text = optMatch[2].trim();
-      current.options[letter] = text;
-      continue;
-    }
-
-    // Otherwise: continuation of question text (multi-line question)
-    if (current && Object.keys(current.options).length === 0) {
-      current.question = (current.question + ' ' + line).trim();
+  let blockMatch;
+  while ((blockMatch = blockRe.exec(text)) !== null) {
+    const id = Number(blockMatch[1]);
+    const content = (blockMatch[2] || '').trim();
+    if (content) {
+      blocks.push({ id, content });
     }
   }
-  if (current) parsed.push(current);
 
-  // Keep only questions that have at least 2 options and non-empty question text
-  const valid = parsed.filter(q =>
-    q.question && Object.keys(q.options).length >= 2
-  );
+  if (blocks.length === 0) {
+    const fallbackBlocks = text
+      .split(/(?=\n?\s*\d+\s*[.)]\s+)/)
+      .map(s => s.trim())
+      .filter(Boolean);
 
-  // Re-number sequentially in case some were dropped
-  valid.forEach((q, idx) => { q.id = idx + 1; });
+    for (let i = 0; i < fallbackBlocks.length; i++) {
+      const fallback = fallbackBlocks[i];
+      const m = fallback.match(/^\d+\s*[.)]\s*([\s\S]*)$/);
+      if (m) blocks.push({ id: i + 1, content: m[1].trim() });
+    }
+  }
 
-  return valid;
+  const parsed = [];
+
+  for (const block of blocks) {
+    const content = block.content;
+    const optionMatches = [...content.matchAll(/(?:^|\s)([A-D])\s*[.:)]\s*([\s\S]*?)(?=(?:\s+[A-D]\s*[.:)]|$))/gi)];
+
+    const options = {};
+    for (const match of optionMatches) {
+      const letter = match[1].toUpperCase();
+      const value = match[2].replace(/\s+/g, ' ').trim();
+      if (value) options[letter] = value;
+    }
+
+    const firstOptionIndex = content.search(/(?:^|\s)[A-D]\s*[.:)]/i);
+    let question = content;
+    if (firstOptionIndex >= 0) {
+      question = content.slice(0, firstOptionIndex).trim();
+    }
+
+    if (question && Object.keys(options).length >= 2) {
+      parsed.push({
+        id: parsed.length + 1,
+        question,
+        options
+      });
+    }
+  }
+
+  if (parsed.length > 0) {
+    const explicitIds = blocks
+      .map(b => Number(b.id))
+      .filter(n => Number.isFinite(n));
+
+    if (explicitIds.length === parsed.length) {
+      parsed.forEach((q, idx) => {
+        q.id = explicitIds[idx];
+      });
+    }
+  }
+
+  return parsed;
 }
 
 /* ==========================================================
