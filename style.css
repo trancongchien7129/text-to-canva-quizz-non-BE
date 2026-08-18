@@ -271,6 +271,19 @@ body{
   margin-top: 24px;
   text-align: center;
 }
+.submit-actions{
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+}
+.btn-submit{
+  flex: 1;
+  max-width: 240px;
+}
+.btn-submit-now{
+  flex: 0 0 auto;
+}
 .hint{
   margin-top: 8px;
   font-size: 13px;

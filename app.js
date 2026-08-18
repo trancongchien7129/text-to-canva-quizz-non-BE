@@ -28,6 +28,7 @@ const quizJump = document.getElementById('quizJump');
 const btnPrev = document.getElementById('btnPrev');
 const btnNext = document.getElementById('btnNext');
 const btnSubmit = document.getElementById('btnSubmit');
+const btnSubmitNow = document.getElementById('btnSubmitNow');
 const submitHint = document.getElementById('submitHint');
 const btnRestart = document.getElementById('btnRestart');
 
@@ -172,6 +173,7 @@ function parseQuestions(rawText) {
   const text = rawText
     .replace(/\r\n/g, '\n')
     .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 
   if (!text) return [];
@@ -183,9 +185,7 @@ function parseQuestions(rawText) {
   while ((blockMatch = blockRe.exec(text)) !== null) {
     const id = Number(blockMatch[1]);
     const content = (blockMatch[2] || '').trim();
-    if (content) {
-      blocks.push({ id, content });
-    }
+    if (content) blocks.push({ id, content });
   }
 
   if (blocks.length === 0) {
@@ -195,8 +195,7 @@ function parseQuestions(rawText) {
       .filter(Boolean);
 
     for (let i = 0; i < fallbackBlocks.length; i++) {
-      const fallback = fallbackBlocks[i];
-      const m = fallback.match(/^\d+\s*[.)]\s*([\s\S]*)$/);
+      const m = fallbackBlocks[i].match(/^\d+\s*[.)]\s*([\s\S]*)$/);
       if (m) blocks.push({ id: i + 1, content: m[1].trim() });
     }
   }
@@ -205,20 +204,27 @@ function parseQuestions(rawText) {
 
   for (const block of blocks) {
     const content = block.content;
-    const optionMatches = [...content.matchAll(/(?:^|\s)([A-D])\s*[.:)]\s*([\s\S]*?)(?=(?:\s+[A-D]\s*[.:)]|$))/gi)];
+    const matches = [...content.matchAll(/(?:^|[^A-Za-z])([A-D])(?=\s*(?:[.:)]|\b|$))/gi)];
+
+    if (matches.length === 0) continue;
+
+    const optionStarts = matches.map((match) => {
+      const letter = match[1].toUpperCase();
+      const absoluteIndex = match.index + match[0].lastIndexOf(letter);
+      return { letter, start: absoluteIndex };
+    });
 
     const options = {};
-    for (const match of optionMatches) {
-      const letter = match[1].toUpperCase();
-      const value = match[2].replace(/\s+/g, ' ').trim();
-      if (value) options[letter] = value;
+    for (let i = 0; i < optionStarts.length; i++) {
+      const current = optionStarts[i];
+      const nextStart = optionStarts[i + 1]?.start ?? content.length;
+      let value = content.slice(current.start + 1, nextStart).trim();
+      value = value.replace(new RegExp(`^${current.letter}\\s*(?:[.:)]\\s*)?`, 'i'), '').trim();
+      if (value) options[current.letter] = value.replace(/\s+/g, ' ');
     }
 
-    const firstOptionIndex = content.search(/(?:^|\s)[A-D]\s*[.:)]/i);
-    let question = content;
-    if (firstOptionIndex >= 0) {
-      question = content.slice(0, firstOptionIndex).trim();
-    }
+    const questionStart = optionStarts[0].start;
+    const question = content.slice(0, questionStart).replace(/\s+/g, ' ').trim();
 
     if (question && Object.keys(options).length >= 2) {
       parsed.push({
@@ -448,6 +454,14 @@ btnNext.addEventListener('click', () => {
 btnSubmit.addEventListener('click', () => {
   const allAnswered = questions.every(q => userAnswers[q.id]);
   if (!allAnswered) return;
+  generateAnswerFile();
+  showScreen(screenDone);
+});
+
+btnSubmitNow.addEventListener('click', () => {
+  questions.forEach(q => {
+    if (!userAnswers[q.id]) userAnswers[q.id] = '';
+  });
   generateAnswerFile();
   showScreen(screenDone);
 });
