@@ -27,7 +27,5 @@ C.đáp án &emsp; D.đáp án
 6. Nút "Nộp bài" chỉ sáng lên khi đã trả lời hết tất cả các câu hỏi. Bấm vào để nộp bài.
 
 7. Sau khi nộp, hệ thống tự động tạo file văn bản chứa toàn bộ đáp án đã chọn và tải xuống máy. Không có dữ liệu nào được gửi đi nơi khác.
-
-<br>
-<br>
+8. <br>
 **website**: https://text-to-canva-quizz-non-be.trancongchien2009.workers.dev/
