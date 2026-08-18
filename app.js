@@ -173,7 +173,6 @@ function parseQuestions(rawText) {
   const text = rawText
     .replace(/\r\n/g, '\n')
     .replace(/\u00a0/g, ' ')
-    .replace(/\s+/g, ' ')
     .trim();
 
   if (!text) return [];
@@ -203,24 +202,43 @@ function parseQuestions(rawText) {
   const parsed = [];
 
   for (const block of blocks) {
-    const content = block.content;
-    const matches = [...content.matchAll(/(?:^|[^A-Za-z])([A-D])(?=\s*(?:[.:)]|\b|$))/gi)];
+    const content = block.content.replace(/\n+/g, '\n').trim();
+    const optionStarts = [];
 
-    if (matches.length === 0) continue;
+    for (let i = 0; i < content.length; i++) {
+      const ch = content[i];
+      if (!/[A-D]/i.test(ch)) continue;
 
-    const optionStarts = matches.map((match) => {
-      const letter = match[1].toUpperCase();
-      const absoluteIndex = match.index + match[0].lastIndexOf(letter);
-      return { letter, start: absoluteIndex };
-    });
+      const prev = content[i - 1] || ' ';
+      if (/[A-Za-z]/.test(prev)) continue;
+
+      let j = i + 1;
+      let consumedWhitespace = false;
+      while (j < content.length && /\s/.test(content[j])) {
+        consumedWhitespace = true;
+        j++;
+      }
+
+      const next = content[j] || '';
+      const validMarker =
+        j >= content.length ||
+        /[.:)]/.test(next) ||
+        (consumedWhitespace && /[A-Za-z]/.test(next));
+
+      if (validMarker) {
+        optionStarts.push({ letter: ch.toUpperCase(), start: i, end: j });
+      }
+    }
+
+    if (optionStarts.length < 2) continue;
 
     const options = {};
     for (let i = 0; i < optionStarts.length; i++) {
       const current = optionStarts[i];
-      const nextStart = optionStarts[i + 1]?.start ?? content.length;
-      let value = content.slice(current.start + 1, nextStart).trim();
+      const next = optionStarts[i + 1] || { start: content.length, end: content.length };
+      let value = content.slice(current.end, next.start).replace(/\s+/g, ' ').trim();
       value = value.replace(new RegExp(`^${current.letter}\\s*(?:[.:)]\\s*)?`, 'i'), '').trim();
-      if (value) options[current.letter] = value.replace(/\s+/g, ' ');
+      if (value) options[current.letter] = value;
     }
 
     const questionStart = optionStarts[0].start;
