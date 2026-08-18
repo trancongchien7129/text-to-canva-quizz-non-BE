@@ -32,6 +32,7 @@ const submitHint = document.getElementById('submitHint');
 const btnRestart = document.getElementById('btnRestart');
 
 const toast = document.getElementById('toast');
+const mammothLib = window.mammoth || window.Mammoth;
 
 // Configure pdf.js worker (CDN)
 if (window['pdfjsLib']) {
@@ -84,8 +85,12 @@ async function readPdfFile(file) {
 }
 
 async function readDocxFile(file) {
+  if (!mammothLib) {
+    throw new Error('Thư viện DOCX chưa được tải. Hãy tải lại trang hoặc kiểm tra mạng.');
+  }
+
   const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
+  const result = await mammothLib.extractRawText({ arrayBuffer });
   return result.value;
 }
 
