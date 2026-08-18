@@ -1,6 +1,18 @@
 **Giới thiệu**
 
 QuizStudy là web học tập trắc nghiệm chạy hoàn toàn trên trình duyệt. Người dùng upload file bài tập, hệ thống tự động đọc và tách thành các câu hỏi trắc nghiệm, sau đó hiển thị từng câu để làm bài trực tiếp trên web. Khi hoàn thành, hệ thống tự động tạo và tải xuống file chứa đáp án đã chọn. Toàn bộ quá trình xử lý diễn ra ngay trên máy của người dùng, không có backend, không database, không gửi bất kỳ dữ liệu nào lên server.
+**Định dạng bài**
+Câu xx. 
+A.
+B.
+C.
+D.
+
+Câu xx.
+A.       B.
+C.       D.
+
+**chưa hỗ trợ đúng sai trả lời ngắn (update soon)**
 
 **Cách dùng**
 
