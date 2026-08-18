@@ -33,24 +33,50 @@ const btnRestart = document.getElementById('btnRestart');
 
 const toast = document.getElementById('toast');
 
-async function ensureLibrary(globalName, src) {
+async function ensureLibrary(globalName, srcList) {
+  const sourceList = Array.isArray(srcList) ? srcList : [srcList];
+
   if (window[globalName]) return window[globalName];
 
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = true;
-    script.onload = () => {
-      if (window[globalName]) resolve(window[globalName]);
-      else reject(new Error(`Thư viện ${globalName} không khởi tạo được.`));
-    };
-    script.onerror = () => reject(new Error(`Không tải được thư viện ${globalName}. Hãy kiểm tra mạng hoặc thử HTTPS.`));
-    document.head.appendChild(script);
-  });
+  for (const src of sourceList) {
+    try {
+      await new Promise((resolve, reject) => {
+        const exists = document.querySelector(`script[src="${src}"]`);
+        if (exists) {
+          if (window[globalName]) {
+            resolve(window[globalName]);
+            return;
+          }
+          exists.addEventListener('load', () => resolve(window[globalName]), { once: true });
+          exists.addEventListener('error', () => reject(new Error(`Script ${src} lỗi.`)), { once: true });
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = () => {
+          if (window[globalName]) resolve(window[globalName]);
+          else reject(new Error(`Thư viện ${globalName} không khởi tạo được.`));
+        };
+        script.onerror = () => reject(new Error(`Không tải được ${src}.`));
+        document.head.appendChild(script);
+      });
+
+      if (window[globalName]) return window[globalName];
+    } catch (err) {
+      // Try next CDN if current one fails
+      if (sourceList.indexOf(src) === sourceList.length - 1) throw err;
+    }
+  }
+
+  throw new Error(`Không tải được thư viện ${globalName}. Hãy kiểm tra mạng hoặc dùng file local.`);
 }
 
 async function ensurePdfJs() {
-  const pdfLib = await ensureLibrary('pdfjsLib', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+  const pdfLib = await ensureLibrary('pdfjsLib', [
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
+  ]);
 
   if (pdfLib.GlobalWorkerOptions) {
     pdfLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -109,21 +135,22 @@ async function readPdfFile(file) {
 }
 
 async function readDocxFile(file) {
-  try {
-    const mammothLib = await ensureLibrary('mammoth', 'https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.6.0/mammoth.browser.min.js');
-    const arrayBuffer = await file.arrayBuffer();
-    const result = await mammothLib.extractRawText({ arrayBuffer });
-    return result.value;
-  } catch (err) {
-    throw new Error(err.message || 'Thư viện DOCX chưa được tải. Hãy tải lại trang hoặc kiểm tra mạng.');
+  if (!window.mammoth) {
+    throw new Error('Thư viện DOCX chưa được nạp. Hãy kiểm tra file mammoth.browser.min.js trong project.');
   }
+
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await window.mammoth.extractRawText({ arrayBuffer });
+  return result.value;
 }
 
 async function readImageFileWithOCR(file) {
   try {
     updateStatus('Đang nhận diện chữ trong ảnh (OCR)... có thể mất chút thời gian.', 'info');
-    const tesseractLib = await ensureLibrary('Tesseract', 'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js');
-    const { data } = await tesseractLib.recognize(file, 'eng+vie');
+    const tesseractLib = await ensureLibrary('Tesseract', [
+      'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js'
+    ]);
+    const { data } = await (window.Tesseract || tesseractLib).recognize(file, 'eng+vie');
     return data.text;
   } catch (err) {
     throw new Error(err.message || 'OCR không hoạt động. Kiểm tra mạng hoặc thử lại.');
