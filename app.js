@@ -32,12 +32,31 @@ const submitHint = document.getElementById('submitHint');
 const btnRestart = document.getElementById('btnRestart');
 
 const toast = document.getElementById('toast');
-const mammothLib = window.mammoth || window.Mammoth;
 
-// Configure pdf.js worker (CDN)
-if (window['pdfjsLib']) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+async function ensureLibrary(globalName, src) {
+  if (window[globalName]) return window[globalName];
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => {
+      if (window[globalName]) resolve(window[globalName]);
+      else reject(new Error(`Thư viện ${globalName} không khởi tạo được.`));
+    };
+    script.onerror = () => reject(new Error(`Không tải được thư viện ${globalName}. Hãy kiểm tra mạng hoặc thử HTTPS.`));
+    document.head.appendChild(script);
+  });
+}
+
+async function ensurePdfJs() {
+  const pdfLib = await ensureLibrary('pdfjsLib', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+
+  if (pdfLib.GlobalWorkerOptions) {
+    pdfLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  return pdfLib;
 }
 
 /* ==========================================================
@@ -72,32 +91,43 @@ function readTxtFile(file) {
 }
 
 async function readPdfFile(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  let fullText = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items.map(item => item.str).join(' ');
-    fullText += pageText + '\n';
+  try {
+    const pdfLib = await ensurePdfJs();
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+    return fullText;
+  } catch (err) {
+    throw new Error(err.message || 'Không đọc được file PDF.');
   }
-  return fullText;
 }
 
 async function readDocxFile(file) {
-  if (!mammothLib) {
-    throw new Error('Thư viện DOCX chưa được tải. Hãy tải lại trang hoặc kiểm tra mạng.');
+  try {
+    const mammothLib = await ensureLibrary('mammoth', 'https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.6.0/mammoth.browser.min.js');
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammothLib.extractRawText({ arrayBuffer });
+    return result.value;
+  } catch (err) {
+    throw new Error(err.message || 'Thư viện DOCX chưa được tải. Hãy tải lại trang hoặc kiểm tra mạng.');
   }
-
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammothLib.extractRawText({ arrayBuffer });
-  return result.value;
 }
 
 async function readImageFileWithOCR(file) {
-  updateStatus('Đang nhận diện chữ trong ảnh (OCR)... có thể mất chút thời gian.', 'info');
-  const { data } = await Tesseract.recognize(file, 'eng+vie');
-  return data.text;
+  try {
+    updateStatus('Đang nhận diện chữ trong ảnh (OCR)... có thể mất chút thời gian.', 'info');
+    const tesseractLib = await ensureLibrary('Tesseract', 'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js');
+    const { data } = await tesseractLib.recognize(file, 'eng+vie');
+    return data.text;
+  } catch (err) {
+    throw new Error(err.message || 'OCR không hoạt động. Kiểm tra mạng hoặc thử lại.');
+  }
 }
 
 /* ==========================================================
