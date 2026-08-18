@@ -179,31 +179,12 @@ function parseQuestions(rawText) {
 
   if (!text) return [];
 
-  const blocks = text.split(/(?=\s*(?:Câu|Cau|Question)\s*\d+\s*(?:[.:]|$))/i)
+  const blocks = text.split(/(?=\s*(?:Câu|Cau|Question)\s*\d+\s*[.:])/i)
     .map(s => s.trim())
     .filter(Boolean);
 
   const questionBlocks = blocks.length ? blocks : [text];
   const parsed = [];
-
-  function findAnswerMarker(body, letter, fromIndex = 0) {
-    const regex = new RegExp(`(?<![A-Za-z])${letter}(?:\\*\\*)?\\s*(?:[.:)]|(?=\\s*(?:\\n|$)))`, 'gi');
-    regex.lastIndex = fromIndex;
-
-    let match = null;
-    while ((match = regex.exec(body)) !== null) {
-      const actualIndex = match.index + match[0].indexOf(letter);
-      if (actualIndex >= fromIndex) {
-        return {
-          letter,
-          start: actualIndex,
-          end: match.index + match[0].length
-        };
-      }
-    }
-
-    return null;
-  }
 
   for (const block of questionBlocks) {
     const blockText = block.replace(/\s+/g, ' ').trim();
@@ -213,22 +194,30 @@ function parseQuestions(rawText) {
     const body = qMatch ? qMatch[2].trim() : blockText;
     if (!body) continue;
 
-    const markers = [];
-    let cursor = 0;
+    const delimiterRegex = /([A-D])\.?\s*/g;
+    const matches = [...body.matchAll(delimiterRegex)];
+    if (matches.length < 4) continue;
 
-    for (const letter of ['A', 'B', 'C', 'D']) {
-      const marker = findAnswerMarker(body, letter, cursor);
-      if (!marker) break;
-      markers.push(marker);
-      cursor = marker.end;
+    const orderedMarkers = [];
+    let expectedLetter = 'A';
+
+    for (const match of matches) {
+      const letter = (match[1] || '').toUpperCase();
+      if (letter !== expectedLetter) continue;
+
+      const start = match.index ?? 0;
+      const end = start + match[0].length;
+      orderedMarkers.push({ letter, start, end });
+      expectedLetter = String.fromCharCode(letter.charCodeAt(0) + 1);
+      if (expectedLetter === 'E') break;
     }
 
-    if (markers.length < 4) continue;
+    if (orderedMarkers.length < 4) continue;
 
     const options = {};
-    for (let i = 0; i < markers.length; i++) {
-      const current = markers[i];
-      const next = markers[i + 1] || { start: body.length };
+    for (let i = 0; i < orderedMarkers.length; i++) {
+      const current = orderedMarkers[i];
+      const next = orderedMarkers[i + 1] || { start: body.length };
       const value = body.slice(current.end, next.start)
         .replace(/^[\s:.)]+|[\s:.)]+$/g, '')
         .trim();
@@ -236,7 +225,7 @@ function parseQuestions(rawText) {
       if (value) options[current.letter] = value;
     }
 
-    const question = body.slice(0, markers[0].start).replace(/\s+/g, ' ').trim();
+    const question = body.slice(0, orderedMarkers[0].start).replace(/\s+/g, ' ').trim();
 
     if (question && Object.keys(options).length >= 4) {
       parsed.push({
