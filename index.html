@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Học Tập – Trắc Nghiệm Offline</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== HEADER ===== -->
+  <header class="topbar">
+    <div class="logo">📘 QuizStudy</div>
+    <div class="topbar-sub">Học & luyện tập trắc nghiệm ngay trên trình duyệt</div>
+  </header>
+
+  <!-- ===== SCREEN 1: UPLOAD ===== -->
+  <section id="screen-upload" class="screen active">
+    <div class="card upload-card">
+      <h1>Upload bài tập</h1>
+      <p class="muted">Hỗ trợ file PDF, DOCX, TXT, JPG/PNG (OCR). Toàn bộ xử lý diễn ra ngay trên máy bạn, không upload lên server.</p>
+
+      <label for="fileInput" class="dropzone" id="dropzone">
+        <span class="dz-icon">📄</span>
+        <span class="dz-text">Kéo thả file vào đây hoặc <strong>bấm để chọn file</strong></span>
+        <span class="dz-formats">.pdf · .docx · .txt · .jpg · .png</span>
+      </label>
+      <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png" hidden>
+
+      <div id="uploadStatus" class="status-box hidden"></div>
+
+      <button id="btnStartQuiz" class="btn btn-primary hidden">Bắt đầu làm bài</button>
+    </div>
+  </section>
+
+  <!-- ===== SCREEN 2: QUIZ ===== -->
+  <section id="screen-quiz" class="screen">
+    <div class="quiz-header">
+      <div class="progress-info">
+        <span id="progressText">Câu 1 / 1</span>
+      </div>
+      <div class="progress-bar-track">
+        <div id="progressBarFill" class="progress-bar-fill"></div>
+      </div>
+    </div>
+
+    <div class="card question-card">
+      <div class="question-number" id="questionNumber">Câu 1</div>
+      <div class="question-text" id="questionText">...</div>
+
+      <div class="options-list" id="optionsList">
+        <!-- options render here -->
+      </div>
+    </div>
+
+    <div class="quiz-nav">
+      <button id="btnPrev" class="btn btn-ghost">← Câu trước</button>
+      <div class="quiz-jump" id="quizJump"><!-- dot indicators --></div>
+      <button id="btnNext" class="btn btn-ghost">Câu tiếp →</button>
+    </div>
+
+    <div class="submit-row">
+      <button id="btnSubmit" class="btn btn-primary btn-submit" disabled>Nộp bài</button>
+      <div id="submitHint" class="hint">Hoàn thành tất cả câu hỏi để nộp bài</div>
+    </div>
+  </section>
+
+  <!-- ===== SCREEN 3: DONE ===== -->
+  <section id="screen-done" class="screen">
+    <div class="card done-card">
+      <div class="done-icon">✅</div>
+      <h1>Đã nộp bài!</h1>
+      <p class="muted">File đáp án đã được tải xuống máy của bạn.</p>
+      <button id="btnRestart" class="btn btn-primary">Làm bài khác</button>
+    </div>
+  </section>
+
+  <!-- ===== ERROR TOAST ===== -->
+  <div id="toast" class="toast hidden"></div>
+
+</div>
+
+<!-- ===== Third-party libraries (CDN, client-side only) ===== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+
+<script src="app.js"></script>
+</body>
+</html>
