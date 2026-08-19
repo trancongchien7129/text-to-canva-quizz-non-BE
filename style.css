@@ -284,6 +284,9 @@ body{
 .btn-submit-now{
   flex: 0 0 auto;
 }
+.btn-pause{
+  flex: 0 0 auto;
+}
 .hint{
   margin-top: 8px;
   font-size: 13px;
@@ -321,4 +324,7 @@ body{
   .question-text{ font-size: 16px; }
   .quiz-nav{ flex-wrap: wrap; }
   .quiz-jump{ order: 3; width: 100%; max-width: none; margin-top: 10px; }
+  .submit-actions{ flex-wrap: wrap; }
+  .btn-submit{ max-width: none; }
+  .btn-submit-now, .btn-pause{ flex: 1 1 140px; }
 }

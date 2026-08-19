@@ -27,5 +27,8 @@ C.đáp án &emsp; D.đáp án
 6. Nút "Nộp bài" chỉ sáng lên khi đã trả lời hết tất cả các câu hỏi. Bấm vào để nộp bài.
 
 7. Sau khi nộp, hệ thống tự động tạo file văn bản chứa toàn bộ đáp án đã chọn và tải xuống máy. Không có dữ liệu nào được gửi đi nơi khác.
-8. <br>
+8. Tiến độ, câu đang làm và đáp án được lưu tự động trong `localStorage`, nên refresh hoặc đóng mở lại trang vẫn tiếp tục được bài đang làm. Mỗi file đề có dữ liệu riêng.
+9. Bấm "Tạm dừng" để lưu tiến độ và quay về màn hình upload. Khi mở lại web, hệ thống hỏi có muốn làm lại bài đang dở không: chọn "Có" để load từ `localStorage`, chọn "Không" để xóa tiến độ.
+10. Bấm "Làm bài khác" cũng xóa dữ liệu của đề hiện tại. Dữ liệu không bị xóa khi refresh hoặc đóng web.
+<br>
 **website**: https://text-to-canva-quizz-non-be.trancongchien2009.workers.dev/

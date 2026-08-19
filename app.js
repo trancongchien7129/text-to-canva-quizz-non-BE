@@ -7,6 +7,48 @@
 let questions = [];        // [{id, question, options:{A,B,C,D}}]
 let userAnswers = {};       // { questionId: "A" }
 let currentIndex = 0;
+let quizId = null;
+let quizState = null;
+
+const STORAGE_PREFIX = 'quiz_state_';
+const ACTIVE_QUIZ_KEY = 'quiz_active_id';
+
+function getStorageKey(id) {
+  return STORAGE_PREFIX + id;
+}
+
+function saveQuizState(id, state) {
+  localStorage.setItem(getStorageKey(id), JSON.stringify(state));
+}
+
+function loadQuizState(id) {
+  const saved = localStorage.getItem(getStorageKey(id));
+  if (!saved) return null;
+
+  try {
+    return JSON.parse(saved);
+  } catch {
+    localStorage.removeItem(getStorageKey(id));
+    return null;
+  }
+}
+
+function deleteQuizState(id) {
+  localStorage.removeItem(getStorageKey(id));
+  if (localStorage.getItem(ACTIVE_QUIZ_KEY) === id) {
+    localStorage.removeItem(ACTIVE_QUIZ_KEY);
+  }
+}
+
+function createQuizId(fileName, text) {
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const safeName = fileName.replace(/[^a-z0-9._-]+/gi, '-').toLowerCase();
+  return `${safeName}-${(hash >>> 0).toString(16)}`;
+}
 
 // ----- DOM refs -----
 const screenUpload = document.getElementById('screen-upload');
@@ -29,6 +71,7 @@ const btnPrev = document.getElementById('btnPrev');
 const btnNext = document.getElementById('btnNext');
 const btnSubmit = document.getElementById('btnSubmit');
 const btnSubmitNow = document.getElementById('btnSubmitNow');
+const btnPause = document.getElementById('btnPause');
 const submitHint = document.getElementById('submitHint');
 const btnRestart = document.getElementById('btnRestart');
 
@@ -271,8 +314,21 @@ function renderQuestion(index) {
 
 function selectAnswer(questionId, letter) {
   userAnswers[questionId] = letter;
+  if (quizState && quizId) {
+    quizState.answers = userAnswers;
+    saveQuizState(quizId, quizState);
+  }
   renderQuestion(currentIndex);
   updateSubmitState();
+}
+
+function setCurrentQuestion(index) {
+  currentIndex = index;
+  if (quizState && quizId) {
+    quizState.currentIndex = index;
+    saveQuizState(quizId, quizState);
+  }
+  renderQuestion(currentIndex);
 }
 
 function updateProgress() {
@@ -292,8 +348,7 @@ function renderJumpDots() {
     if (idx === currentIndex) dot.classList.add('current');
     dot.title = `Câu ${q.id}`;
     dot.addEventListener('click', () => {
-      currentIndex = idx;
-      renderQuestion(currentIndex);
+      setCurrentQuestion(idx);
     });
     quizJump.appendChild(dot);
   });
@@ -361,11 +416,50 @@ function showScreen(screen) {
   screen.classList.add('active');
 }
 
+function restoreActiveQuiz() {
+  const savedQuizId = localStorage.getItem(ACTIVE_QUIZ_KEY);
+  if (!savedQuizId) return;
+
+  const savedState = loadQuizState(savedQuizId);
+  if (!savedState || !Array.isArray(savedState.questions) || !savedState.questions.length) {
+    localStorage.removeItem(ACTIVE_QUIZ_KEY);
+    return;
+  }
+
+  const shouldResume = window.confirm(
+    'Bạn có muốn làm lại bài đang dở không?\n\nBấm "OK" để tiếp tục hoặc "Cancel" để xóa tiến độ.'
+  );
+
+  if (!shouldResume) {
+    deleteQuizState(savedQuizId);
+    return;
+  }
+
+  quizId = savedQuizId;
+  quizState = savedState;
+  questions = savedState.questions;
+  userAnswers = savedState.answers || {};
+  currentIndex = Math.min(
+    Math.max(Number(savedState.currentIndex) || 0, 0),
+    Math.max(questions.length - 1, 0)
+  );
+
+  if (savedState.submitted) {
+    showScreen(screenDone);
+    return;
+  }
+
+  showScreen(screenQuiz);
+  renderQuestion(currentIndex);
+  updateSubmitState();
+}
+
 /* ==========================================================
    6) EVENT WIRING
    ========================================================== */
 
 let lastParsedQuestions = null; // holds result until user confirms "Bắt đầu làm bài"
+let lastParsedQuizId = null;
 
 dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', (e) => {
@@ -388,6 +482,7 @@ fileInput.addEventListener('change', (e) => {
 async function handleFile(file) {
   btnStartQuiz.classList.add('hidden');
   lastParsedQuestions = null;
+  lastParsedQuizId = null;
   updateStatus(`Đang đọc file "${file.name}"...`, 'info');
 
   try {
@@ -410,6 +505,7 @@ async function handleFile(file) {
     }
 
     lastParsedQuestions = parsed;
+    lastParsedQuizId = createQuizId(file.name, text);
     updateStatus(`✅ Đã nhận diện ${parsed.length} câu hỏi từ file.`, 'success');
     btnStartQuiz.classList.remove('hidden');
 
@@ -423,8 +519,35 @@ async function handleFile(file) {
 btnStartQuiz.addEventListener('click', () => {
   if (!lastParsedQuestions) return;
   questions = lastParsedQuestions;
-  userAnswers = {};
-  currentIndex = 0;
+  quizId = lastParsedQuizId;
+  quizState = loadQuizState(quizId);
+
+  if (!quizState) {
+    quizState = {
+      quizId,
+      currentIndex: 0,
+      answers: {},
+      questions,
+      submitted: false,
+      startedAt: Date.now()
+    };
+    saveQuizState(quizId, quizState);
+  }
+
+  quizState.questions = questions;
+  localStorage.setItem(ACTIVE_QUIZ_KEY, quizId);
+  saveQuizState(quizId, quizState);
+  userAnswers = quizState.answers || {};
+  currentIndex = Math.min(
+    Math.max(Number(quizState.currentIndex) || 0, 0),
+    Math.max(questions.length - 1, 0)
+  );
+
+  if (quizState.submitted) {
+    showScreen(screenDone);
+    return;
+  }
+
   showScreen(screenQuiz);
   renderQuestion(currentIndex);
   updateSubmitState();
@@ -432,21 +555,29 @@ btnStartQuiz.addEventListener('click', () => {
 
 btnPrev.addEventListener('click', () => {
   if (currentIndex > 0) {
-    currentIndex--;
-    renderQuestion(currentIndex);
+    setCurrentQuestion(currentIndex - 1);
   }
 });
 
 btnNext.addEventListener('click', () => {
   if (currentIndex < questions.length - 1) {
-    currentIndex++;
-    renderQuestion(currentIndex);
+    setCurrentQuestion(currentIndex + 1);
   }
 });
+
+function submitQuiz() {
+  if (!quizState || !quizId) return;
+  quizState.answers = userAnswers;
+  quizState.submitted = true;
+  quizState.submittedAt = Date.now();
+  quizState.total = questions.length;
+  saveQuizState(quizId, quizState);
+}
 
 btnSubmit.addEventListener('click', () => {
   const allAnswered = questions.every(q => userAnswers[q.id]);
   if (!allAnswered) return;
+  submitQuiz();
   generateAnswerFile();
   showScreen(screenDone);
 });
@@ -455,17 +586,35 @@ btnSubmitNow.addEventListener('click', () => {
   questions.forEach(q => {
     if (!userAnswers[q.id]) userAnswers[q.id] = '';
   });
+  submitQuiz();
   generateAnswerFile();
   showScreen(screenDone);
 });
 
+btnPause.addEventListener('click', () => {
+  if (!quizState || !quizId) return;
+  quizState.answers = userAnswers;
+  quizState.currentIndex = currentIndex;
+  quizState.submitted = false;
+  saveQuizState(quizId, quizState);
+  localStorage.setItem(ACTIVE_QUIZ_KEY, quizId);
+  showScreen(screenUpload);
+  showToast('Đã lưu tiến độ. Bạn có thể mở lại để tiếp tục bài.');
+});
+
 btnRestart.addEventListener('click', () => {
+  if (quizId) deleteQuizState(quizId);
   questions = [];
   userAnswers = {};
   currentIndex = 0;
+  quizId = null;
+  quizState = null;
   lastParsedQuestions = null;
+  lastParsedQuizId = null;
   fileInput.value = '';
   uploadStatus.classList.add('hidden');
   btnStartQuiz.classList.add('hidden');
   showScreen(screenUpload);
 });
+
+restoreActiveQuiz();
