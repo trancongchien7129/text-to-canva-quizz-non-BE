@@ -30,5 +30,5 @@ C.đáp án &emsp; D.đáp án
 8. Tiến độ, câu đang làm và đáp án được lưu tự động trong `localStorage`, nên refresh hoặc đóng mở lại trang vẫn tiếp tục được bài đang làm. Mỗi file đề có dữ liệu riêng.
 9. Bấm "Tạm dừng" để lưu tiến độ và quay về màn hình upload. Khi mở lại web, hệ thống hỏi có muốn làm lại bài đang dở không: chọn "Có" để load từ `localStorage`, chọn "Không" để xóa tiến độ.
 10. Bấm "Làm bài khác" cũng xóa dữ liệu của đề hiện tại. Dữ liệu không bị xóa khi refresh hoặc đóng web.
-<br>
+
 **website**: https://text-to-canva-quizz-non-be.trancongchien2009.workers.dev/
